@@ -159,7 +159,7 @@ class WavePairWrapper:
 
         return _recovered_time_shift
 
-    def phase_shift(self):
+    def phase_shift(self, error_rads=0.0):
         wave_a_spectrum = self._wave_a.get_wave().make_spectrum()
         wave_a_fund_freq = self._wave_a.get_fund_freq()
         wave_a_freq_idx = util.find_nearest_idx(wave_a_spectrum, wave_a_fund_freq, 1)
@@ -170,7 +170,7 @@ class WavePairWrapper:
         wave_b_freq_idx = util.find_nearest_idx(wave_b_spectrum, wave_b_fund_freq, 1)
         wave_b_fund_phase = wave_b_spectrum.angles[wave_b_freq_idx]
         
-        return wave_b_fund_phase - wave_a_fund_phase
+        return (wave_b_fund_phase - wave_a_fund_phase) + error_rads
         # return wave_a_fund_phase - wave_b_fund_phase
         # _period = 1.0 / self._wave_a.get_fund_freq()
         # # force the phase shift to be in [-pi:pi]
@@ -205,6 +205,9 @@ class WavePairWrapper:
 
     def active_power(self):
         return math.cos(self.phase_shift()) * self.apparent_power_hn(1)
+    #
+    # def power_factor(self):
+    #     return self.active_power() / self.apparent_t_power()
 
     def power_factor(self):
-        return self.active_power() / self.apparent_t_power()
+        return (1 / math.sqrt(1 + self._wave_a.t_rms() ** 2)) * (1 / math.sqrt(1 + self._wave_b.t_rms() ** 2))

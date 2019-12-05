@@ -2,6 +2,9 @@ import tables
 import numpy as np
 import multiprocessing
 import sys
+
+from bitstring import BitArray
+
 from utils.inputsignal import *
 
 
@@ -10,7 +13,7 @@ def udp_to_signal_chunk(_udp_packet):
     readings = []
 
     for i in range(4, len(_udp_packet), 2):
-        data = BitArray(_udp_packet[i:i + 2]).int
+        data = BitArray(_udp_packet[i:i + 2]).uint
         readings.append(data)
 
     even_readings = readings[0:][::2]

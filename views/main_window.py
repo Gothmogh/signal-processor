@@ -147,6 +147,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, *args, **kwargs):
         QtWidgets.QMainWindow.__init__(self, *args, **kwargs)
         self.setupUi(self)
+        self.showMaximized()
+        self.setWindowTitle('Network Analyzer')
         # self.__wave_pair_wrapper = self.load_wave_pair_wrapper_csv('data/', 'sampleSignal.csv')
         self.__wave_pair_wrapper = load_wave_pair_wrapper_from_udp_packets(1)
         self.draw_contents()
@@ -177,20 +179,29 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         tension_spectrum = tension_wave.make_spectrum()
         tension_wave = tension_wave_wrapper.get_wave()
         tension_fund_freq = tension_wave_wrapper.get_fund_freq()
-        tension_values = {'t_rms': tension_wave_wrapper.t_rms(), 'h1_amp': tension_wave_wrapper.hn_amp(),
-                          'h1_rms': tension_wave_wrapper.hn_rms(), 'h2_amp': tension_wave_wrapper.hn_amp(n=2, ),
-                          'h2_rms': tension_wave_wrapper.hn_rms(n=2, ), 'h3_amp': tension_wave_wrapper.hn_amp(n=3, ),
-                          'h3_rms': tension_wave_wrapper.hn_rms(n=3, ), 't_h_dist': tension_wave_wrapper.t_h_dist(n_max=3, )}
+        tension_values = {'t_rms': tension_wave_wrapper.t_rms(), 'h1_amp': tension_wave_wrapper.hn_amp(n=3),
+                          'h1_rms': tension_wave_wrapper.hn_rms(n=3), 'h2_amp': tension_wave_wrapper.hn_amp(n=5),
+                          'h2_rms': tension_wave_wrapper.hn_rms(n=5), 'h3_amp': tension_wave_wrapper.hn_amp(n=7),
+                          'h3_rms': tension_wave_wrapper.hn_rms(n=7), 't_h_dist': tension_wave_wrapper.t_h_dist(n_max=3),
+                          'fund_freq': tension_fund_freq}
 
         current_wave_wrapper = self.__wave_pair_wrapper.get_wave_b_wrapper()
         current_wave = current_wave_wrapper.get_wave()
         current_spectrum = current_wave.make_spectrum()
         current_fund_freq = current_wave_wrapper.get_fund_freq()
-        current_values = {'t_rms': current_wave_wrapper.t_rms(), 'h1_amp': current_wave_wrapper.hn_amp(),
-                          'h1_rms': current_wave_wrapper.hn_rms(), 'h2_amp': current_wave_wrapper.hn_amp(n=2, ),
-                          'h2_rms': current_wave_wrapper.hn_rms(n=2, ), 'h3_amp': current_wave_wrapper.hn_amp(n=3, ),
-                          'h3_rms': current_wave_wrapper.hn_rms(n=3, ), 't_h_dist': current_wave_wrapper.t_h_dist(n_max=3, )}
+        current_values = {'t_rms': current_wave_wrapper.t_rms(), 'h1_amp': current_wave_wrapper.hn_amp(n=3),
+                          'h1_rms': current_wave_wrapper.hn_rms(n=3), 'h2_amp': current_wave_wrapper.hn_amp(n=5),
+                          'h2_rms': current_wave_wrapper.hn_rms(n=5), 'h3_amp': current_wave_wrapper.hn_amp(n=7),
+                          'h3_rms': current_wave_wrapper.hn_rms(n=7), 't_h_dist': current_wave_wrapper.t_h_dist(n_max=3),
+                          'fund_freq': current_fund_freq}
 
+        phi = self.__wave_pair_wrapper.phase_shift(error_rads=3.8 * ((2 * math.pi) / 360))
+        p = self.__wave_pair_wrapper.active_power()
+
+        power_output = {'phi': phi * (360 / (2 * math.pi)), 'cos_phi': math.cos(phi), 's_h1': self.__wave_pair_wrapper.apparent_power_hn(n=1),
+                        'q_h1': self.__wave_pair_wrapper.reactive_power_hn(n=1), 'p': p,
+                        's_t': self.__wave_pair_wrapper.apparent_t_power(), 'q_t': self.__wave_pair_wrapper.reactive_t_power(),
+                        'power_factor': self.__wave_pair_wrapper.power_factor()}
 
         # plot data: x, y values
         # self.tensionWaveWidget.plotItem.close()
@@ -200,11 +211,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.plot_wave(self.tensionWaveWidget, tension_wave, 'Tension', 'Tension [V]', 'Time [s]', 'b')
         self.plot_spectrum(self.tensionSpectrumWidget, tension_spectrum, 'Tension', 'Amplitude [Vp]', 'Frequency [Hz]', 'b', limit=tension_fund_freq * spectrum_limit_mult)
-        self.plot_values(self, tension_values, 'tension')
+        self.plot_wave_values(self, tension_values, 'tension')
 
         self.plot_wave(self.currentWaveWidget, current_wave, 'Current', 'Current [A]', 'Time [s]', 'r')
         self.plot_spectrum(self.currentSpectrumWidget, current_spectrum, 'Current', 'Amplitude [Ap]', 'Frequency [Hz]', 'r', limit=current_fund_freq * spectrum_limit_mult)
-        self.plot_values(self, current_values, 'current')
+        self.plot_wave_values(self, current_values, 'current')
+
+        self.plot_wave_pair_values(self, power_output)
+        # self.plot_power_triangle(self.powerTriangleWidget, power_output)
 
     @staticmethod
     def plot_wave(plot_widget, wave, name, left_label, bottom_label, color):
@@ -232,9 +246,29 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             bar_graph = pg.BarGraphItem(x=spectrum.fs[:limit], width=2.5, height=spectrum.amps[:limit], brush=color)
             plot_widget.addItem(bar_graph)
+        plot_widget.getPlotItem().getViewBox().enableAutoRange('y', 0.95)
 
     @staticmethod
-    def plot_values(window, values, name):
+    def plot_power_triangle(plot_widget, power_values):
+        plot_widget.setTitle('Power Fasor Diagram')
+        plot_widget.setBackground('w')
+
+        active_power = power_values['active_power']
+        reactive_power = power_values['reactive_power']
+        apparent_power = power_values['apparent_power']
+        # pen = pg.mkPen(brush=color)
+        # pg.BarGraphItem(x=spectrum.fs, height=spectrum.amps, width=0.6, )
+        # limit = util.find_nearest_idx(spectrum, limit, 1)
+        # if limit is None:
+        #     bar_graph = pg.BarGraphItem(x=spectrum.fs, width=2.5, height=spectrum.amps, brush=color)
+        #     plot_widget.addItem(bar_graph)
+        # else:
+        #     bar_graph = pg.BarGraphItem(x=spectrum.fs[:limit], width=2.5, height=spectrum.amps[:limit],
+        #                                 brush=color)
+        #     plot_widget.addItem(bar_graph)
+
+    @staticmethod
+    def plot_wave_values(window, values, name):
         window.round_dictionary(values, 2)
         getattr(window, name + 'TotalRmsValue').display(values['t_rms'])
         getattr(window, name + 'TotalHarmDistValue').display(values['t_h_dist'])
@@ -244,6 +278,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         getattr(window, name + 'SecondHarmAmpValue').display(values['h2_amp'])
         getattr(window, name + 'ThirdHarmRmsValue').display(values['h3_rms'])
         getattr(window, name + 'ThirdHarmAmpValue').display(values['h3_amp'])
+        getattr(window, name + 'FundFreqValue').display(values['fund_freq'])
+
+    @staticmethod
+    def plot_wave_pair_values(window, values):
+        window.round_dictionary(values, 2)
+        getattr(window, 'phaseShiftDegValue').display(values['phi'])
+        getattr(window, 'phiCosineValue').display(values['cos_phi'])
+        getattr(window, 'totalApparentPowerValue').display(values['s_t'])
+        # getattr(window, name + 'FirstHarmAmpValue').display(values['h1_amp'])
+        # getattr(window, name + 'SecondHarmRmsValue').display(values['h2_rms'])
+        # getattr(window, name + 'SecondHarmAmpValue').display(values['h2_amp'])
+        # getattr(window, name + 'ThirdHarmRmsValue').display(values['h3_rms'])
+        # getattr(window, name + 'ThirdHarmAmpValue').display(values['h3_amp'])
 
     @staticmethod
     def load_wave_pair_wrapper_csv(data_location, filename):
